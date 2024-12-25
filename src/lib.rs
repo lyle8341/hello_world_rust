@@ -1,9 +1,22 @@
-mod front_of_house;
+fn add(a: i32, b: i32) -> i32 {
+    a + b
+}
 
-pub use crate::front_of_house::hosting;
+// #[cfg(test)]
+mod add_function_tests {
+    use super::*;
 
-pub fn eat_at_restaurant() {
-    hosting::add_to_waitlist();
-    hosting::add_to_waitlist();
-    hosting::add_to_waitlist();
+    #[test]
+    fn add_works() {
+        assert_eq!(add(1, 2), 3);
+        assert_eq!(add(10, 12), 22);
+        assert_eq!(add(5, -2), 3);
+    }
+
+    #[test]
+    #[should_panic]
+    fn add_fails() {
+        assert_eq!(add(2, 2), 7);
+    }
+
 }

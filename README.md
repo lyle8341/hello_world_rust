@@ -87,7 +87,7 @@
 * Rust的核心特性就是所有权
 * 所有程序在运行时都必须管理它们使用计算机内存的方式
   * 有些语言有垃圾手机机制
-  * 有些语言，程序员必须显示地分配和释放内存
+  * 有些语言，程序员必须显式地分配和释放内存
 * Rust采用另一种方式
   * 通过一个所有权系统来管理，其中包含一组编译器在编译时检查的规则
   * 当程序运行时，所有权特性不会减慢程序的运行速度
@@ -171,13 +171,15 @@ fn calculate_length(s: &String) -> usize {
 
 * 引用和借用
   * &符号表示引用，允许引用某些值而不取得其所有权
-  * 把引用作为函数参数这个行为叫做借用
+  * 把引用作为函数参数这个行为叫做借用\
+
+## 切片
+
+* 切片
+  * 不持有所有权的数据类型：***slice***
 
 ## 字符串
 
-* 切片
-  * > 不持有所有权的数据类型：***slice***
-    >
 * 字符串切片
   * > 指向字符串中一部分内容的引用
     >
@@ -353,13 +355,11 @@ fn area(rect: &Rectangle) -> u32 {
 * Module、use：控制代码的组织、作用域、私有路径
 * Path：为struct、function或module等项命名的方式
 
-
 ## 所有权和借用规则
 
 * 不能在同一作用域内同时拥有可变和不可变引用
   * ![所有权和借用](images/belong-borrow.png "所有权和借用")
   * situation_a正确运行，但是situation_b报错，因为v.push之后v已不是之前的v，而println再次使用first，first内存区域仍旧是之前v的
-
 
 ## HashMap
 
@@ -385,9 +385,8 @@ fn main() {
   * 对于实现了Copy trait的类型（例如 i32），***值会被复制到HashMap中***
   * 对于拥有所有权的值（例如 String），值会被移动，***所有权会转移给HashMap***
   * 如果将值的引用插入到HashMap，值本身不会移动
-
-
 * entry(key) 方法
+
   * 检查指定的K是否对应一个V
     * 参数K
     * 返回enum Entry 代表值是否存在
@@ -408,10 +407,10 @@ fn main() {
     )
     ```
 * Entry的 or_insert() 方法
+
   * 返回
     * 如果K存在，返回 ***到对应的V的一个可变引用***
     * 如果K不存在，将方法参数作为K的新值插进去，返回 ***到这个值的可以引用***
-
 
 ## Rust 错误处理概述
 
@@ -435,7 +434,6 @@ fn main() {
         [profile.release]
         panic = 'abort'
         ```
-
 
 ## Result 枚举
 
@@ -464,3 +462,236 @@ E: 操作失败情况下，Err变体里返回的错误的类型
     ```
 * `Box<dyn Error> 是trait对象`
   * 简单理解：”任何可能的错误类型“
+
+## 提取函数
+
+```rust
+fn main() {
+    let num_list = vec![34, 54, 66, 100, 75];
+    largest_pattern_match(&num_list);
+    largest(&num_list);
+
+    let num_list = vec![34, 54, 66, 100, 75, 102, 5000];
+    largest_pattern_match(&num_list);
+    largest(&num_list);
+}
+
+//only works with Copy types
+fn largest_pattern_match(arr: &[i32]) -> i32 {
+    let mut temp: i32 = arr[0];
+    for &num in arr { //&num 模式匹配
+        if num > temp {
+            temp = num;
+        }
+    }
+    println!("The largest number is {}", temp);
+    temp
+}
+
+// works with both Copy and non-Copy types
+fn largest(list: &[i32]) -> i32 {
+    let mut largest = list[0];
+
+    for item in list {
+        if *item > largest {
+            largest = *item;
+        }
+    }
+    println!("The largest number is {}", largest);
+    largest
+}
+
+```
+
+## 泛型
+
+* 泛型代码的性能
+  * 使用泛型的代码和使用具体类型的代码运行速度是一样的
+  * 单态化（monomorphization)
+    * 在编译时将泛型替换为具体类型的过程
+
+## Trait
+
+> Trait告诉Rust编译器：某种类型具有哪些并且可以与其他类型共享的功能
+>
+> Trait：抽象的定义共享行为
+>
+> Trait bounds（约束）
+>
+> Trait与其他语言的接口（interface）类似，但有些区别
+
+* 定义一个trait
+
+  * 把方法签名放在一起，来定义实现某种目的所必须的一组行为
+    * 关键字：trait
+    * 只有方法签名，没有具体实现
+    * trait可以有多个方法；每个方法签名占一行，以；结尾
+    * 实现该trait的类型必须提供具体的方法实现
+* lib.rs
+
+  * ```rust
+    pub trait Sumary {
+        fn summarize(&self) -> String;
+    }
+
+    pub struct NewsArticle {
+        pub headline: String,
+        pub location: String,
+        pub author: String,
+        pub content: String,
+    }
+
+    impl Sumary for NewsArticle {
+        fn summarize(&self) -> String {
+            format!("{}, by {} ({})", self.headline, self.author, self.location)
+        }
+    }
+
+    pub struct Tweet {
+        pub username: String,
+        pub content: String,
+        pub reply: bool,
+        pub retweet: bool,
+    }
+
+    impl Sumary for Tweet {
+        fn summarize(&self) -> String {
+            format!("{}: {}", self.username, self.content)
+        }
+    }
+
+    ```
+* main.rs
+
+  * ```rust
+    // hello_world_rust是cargo.toml中的包名
+    use hello_world_rust::Sumary;
+    use hello_world_rust::NewsArticle;
+    use hello_world_rust::Tweet;
+
+
+    fn main() {
+        let tweet = Tweet {
+            username: String::from("horse_ebooks"),
+            content: String::from("of couse, as you probably already know, people"),
+            reply: false,
+            retweet:false,
+        };
+        println!("{}", tweet.summarize());
+
+        let article = NewsArticle {
+            content: String::from("地铁和施工架子撞了，很严重"),
+            headline: String::from("上海地铁撞车了"),
+            location: String::from("上海"),
+            author: String::from("lyle"),
+        };
+        println!("{}", article.summarize());
+
+    }
+
+    ```
+
+## 生命周期
+
+* Rust 的每个引用都有自己的生命周期
+* 生命周期：引用保持有效的作用域
+* 大多数情况：生命周期是隐士的，可被推断的
+* 当引用的生命周期可能以不同的方式互相关联时：手动标注生命周期
+* ```rust
+  fn main() {
+      let s1 = String::from("abcd");
+      let s2 = "xyz";
+
+      let result = longest(&s1, &s2);
+      println!("{}", result);
+      println!("{}", s1);
+      println!("{}", s2);
+  }
+
+  fn longest<'a>(x: &'a str, y: &'a str) -> &'a str {
+      if x.len() > y.len() {
+          x
+      } else {
+          y
+      }
+  }
+
+  ```
+
+### 生命周期标注语法
+
+* 生命周期的标注不会改变引用的生命周期长度
+* 当指定了泛型生命周期参数，函数可以接收带有任何生命周期的引用
+* 生命周期的标注：描述了多个引用的生命周期的关系，但不影响生命周期
+* 标注语法
+  * 以 ' 开头
+  * 通常全小写且非常短
+  * 很多人使用 'a
+* 标注的位置
+  * 在引用的&符号后
+  * 使用空格将标注和引用类型分开
+    * （&i32 -> &'a i32）带有显式生命周期的引用
+    * （&'a mut i32） 带有显式生命周期的可变引用
+    * 单个生命周期标注本身没有意义
+
+> **如果函数返回的引用没有指向任何参数，那么它只能引用函数内创建的值，**
+>
+> **这就是悬垂引用：该值在函数结束时就走出了作用域**
+
+### 生命周期省略的三个规则
+
+> 编译器使用3个规则在没有显式标注生命周期的情况下，来确定引用的生命周期
+
+1. 规则1：每个引用类型的参数都有自己的生命周期
+   1. 应用于**输入**生命周期
+2. 规则2：如果只有一个输入生命周期参数，那么该生命周期被赋给所有的输出生命周期参数
+   1. 应用于**输出**生命周期
+3. 规则3：如果有多个输入生命周期参数，但其中一个是&self或&mut self（***是方法***），那么self的生命周期会被赋给所有的输出生命周期参数
+   1. 应用于**输出**生命周期
+4. 如果编译器应用完3个规则之后，仍然有无法确定生命周期的引用->报错
+5. 这些规则适用于fn定义和impl块
+
+
+
+### 静态生命周期
+
+> 'static 是一个特殊的生命周期：整个程序的持续时间
+
+* 所有的字符串字面值都拥有 'static 生命周期
+
+  * `let a: &'static str = "good";`
+
+
+## 测试
+
+> 测试函数需要使用test属性（attribute）进行标注
+
+* Attribute就是一段Rust代码的元数据
+* 在函数上加 #[test] 可以把函数变成测试函数
+
+> cargo test  命令运行所有测试函数
+
+## 测试的分类
+
+### 单元测试
+
+* 小、专注
+* 一次对一个模块进行隔离的测试
+* 可测试private接口
+
+> tests模块上的 #[cfg(test)] 标注：
+>
+> * 只有运行cargo test 才**编译**和**运行**代码
+> * 运行cargo build 则不会
+
+
+### 集成测试
+
+* 在库外部。和其它外部代码一样使用你的代码
+* 集成测试在不同的目录，它***不需要*** #[cfg(test)] 标注
+
+
+### cfg: configuration
+
+> * 告诉Rust下面的条目只有在指定的配置选项下才被包含
+> * 配置项test，用来编译和运行测试
