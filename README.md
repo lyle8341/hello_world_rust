@@ -11,6 +11,7 @@
 
 1. cargo --version
 2. 创建项目: cargo new hello_cargo
+   1. 创建库项目: cargo new encrypt --lib
 3. 构建项目: cargo build
 4. 构建运行: cargo run
 5. 发布构建: cargo build --release
@@ -651,8 +652,6 @@ fn largest(list: &[i32]) -> i32 {
 4. 如果编译器应用完3个规则之后，仍然有无法确定生命周期的引用->报错
 5. 这些规则适用于fn定义和impl块
 
-
-
 ### 静态生命周期
 
 > 'static 是一个特殊的生命周期：整个程序的持续时间
@@ -660,7 +659,6 @@ fn largest(list: &[i32]) -> i32 {
 * 所有的字符串字面值都拥有 'static 生命周期
 
   * `let a: &'static str = "good";`
-
 
 ## 测试
 
@@ -684,14 +682,297 @@ fn largest(list: &[i32]) -> i32 {
 > * 只有运行cargo test 才**编译**和**运行**代码
 > * 运行cargo build 则不会
 
-
 ### 集成测试
 
 * 在库外部。和其它外部代码一样使用你的代码
 * 集成测试在不同的目录，它***不需要*** #[cfg(test)] 标注
-
+* 创建集成测试 tests 目录
+* tests目录下的每个测试文件都是单独的一个crate
+* 只有cargo test 才会编译tests目录
 
 ### cfg: configuration
 
 > * 告诉Rust下面的条目只有在指定的配置选项下才被包含
 > * 配置项test，用来编译和运行测试
+
+### 针对binary crate的集成测试
+
+> 如果项目是binary crate， 只含有src/main.rs 没有 src/lib.rs
+>
+> * 不能在tests目录下创建集成测试
+> * 无法把main.rs的函数导入作用域
+> * 只有library crate才能暴露函数给其他crate用
+> * binary crate意味着独立运行
+
+## 文档
+
+`cargo doc --open`
+
+> lib.rs
+>
+> * 注意 ` ``` 符号 `
+
+```rust
+/// 给定数组加上1
+///
+/// # Examples
+/// ```
+/// let arg = 5;
+/// let answer = encrypt::add_one(arg);
+///
+/// assert_eq!(6, answer);
+/// ```
+pub fn add_one(x: i32) -> i32 {
+    x + 1
+}
+
+```
+
+## 不使用cargo，直接命令编译，依赖库文件
+
+1. 让我们创建一个库，然后看看如何把它链接到另一个 crate。
+   1. 创建文件名为 mylib.rs
+   2. ```rust
+      pub fn public_function() {
+          println!("called rary's `public_function()`");
+      }
+
+      fn private_function() {
+          println!("called rary's `private_function()`");
+      }
+
+      pub fn indirect_access() {
+          print!("called rary's `indirect_access()`, that\n> ");
+
+          private_function();
+      }
+      ```
+   3. ```bash
+      rustc --crate-type=lib mylib.rs
+      # 默认情况下，库会使用 crate 文件的名字，前面加上 “lib” 前缀，但这个默认名称可以使用 crate_name 属性 覆盖
+      ```
+2. 使用上述库
+   1. 创建文件名 executable.rs
+   2. ```rust
+      // extern crate rary; // 在 Rust 2015 版或更早版本需要这个导入语句
+
+      fn main() {
+          rary::public_function();
+
+          // 报错！ `private_function` 是私有的
+          //rary::private_function();
+
+          rary::indirect_access();
+      }
+
+      ```
+   3. ```bash
+      # libmylib.rlib 是已编译好的库的路径，这里假设它在同一目录下：
+      rustc executable.rs --extern rary=libmylib.rlib --edition=2018 && ./executable
+      ```
+   4. [参考地址](https://rustwiki.org/zh-CN/rust-by-example/crates/using_lib.html)
+
+## 接受命令行参数
+
+> cargo run searchStr target.txt
+
+## 二进制程序关注点分离的指导性原则
+
+1. 将程序拆分为main.rs和lib.rs，将业务逻辑放入lib.rs
+2. 当命令行解析逻辑较少时，将它放在main.rs也行
+3. 当命令行解析逻辑变复杂时，需要将它从main.rs提取到lib.rs
+
+## 闭包
+
+> 可以捕获其所在环境的匿名函数
+
+#### 闭包
+
+* 是匿名函数
+* 保存为变量，作为参数
+* 可在一个地方创建闭包，然后在另一个上下文中调用闭包来完成运算
+* 可从其定义的作用域捕获值
+  * 闭包可以访问定义它的作用域内的变量，普通函数则不能
+  * 会产生内存开销
+
+#### 闭包类型推断
+
+* 闭包不要求标注参数和返回值类型
+* 闭包通常很短小，只在狭小的上下文中工作，编译器通常能推断出类型
+* 可以手动添加类型标注
+* 注意：闭包的定义最终只会为参数/返回值推断出***唯一具体的类型***
+
+#### Fn trait
+
+* Fn traits 由标准库提供
+* 所有闭包都至少实现了以下trait之一：
+  * Fn
+    * 当指定Fn trait bound之一时，首先用Fn,
+  * FnMut
+  * FnOnce
+
+#### 闭包从所在环境捕获值的方式
+
+* 取得所有权：FnOnce
+* 可变借用：FnMut
+* 不可变借用：Fn
+
+##### move关键字
+
+> 在参数列表前使用move关键字，可以强制闭包取得它所使用的环境值的所有权
+>
+> * 当将闭包传递给新线程以移动数据使其归新线程所有时，此技术最为有用
+
+## 迭代器
+
+* iter方法：在不可变引用上创建迭代器
+* into_iter方法：创建的迭代器会获得所有权
+* iter_mut方法：迭代可变的引用
+
+
+
+## for vs iterator
+
+> 迭代器版本更快一些
+>
+> * Zero-Cost Abstraction(零开销抽象)
+> * 使用抽象时不会引入额外的运行时开销
+
+
+## cargo
+
+
+#### pub use
+
+> * 麻烦: my_crate::some_module::another_module::UsefulType;
+> * 方便: my_crate::UsefulType;
+> * 解决办法
+>   * 使用pub use: 可以重新导出，创建一个与内部私有结构不同的对外公共结构
+
+
+#### 发布crate
+
+> 需要在Cargo.toml的 [package] 区域为 crate 添加一些元数据
+>
+> * crate 需要唯一的名称： name
+> * description：一两句话即可，会出现在crate搜索的结果里
+> * license：可以指定多个，用 OR
+> * version
+> * author
+> * 发布： cargo publish
+> * yank一个版本
+>   * cargo yank --vers 1.0.1
+> * 取消yank
+>   * cargo yank --vers 1.0.1 --undo
+
+
+## 工作空间（workspace）
+
+> 比如：一个二进制crate， 2个库crate
+>
+> * 二进制crate：main函数依赖于其他2个库crate
+> * 一个库crate提供 add_one函数
+> * 另一个库crate提供add_two函数
+
+
+### 运行指定的crate
+
+`cargo run -p crateName`
+
+### 安装二进制crate
+
+> cargo install xxx
+
+
+## 智能指针
+
+* 指针：一个变量在内存中包含的是一个地址
+* Rust中最常见的指针就是“引用”
+  * 使用&
+  * 借用它指向的值
+  * 没有其余开销
+* 智能指针是这样一些数据结构：
+  * 行为和指针相似
+  * 有额外的元数据和功能
+  * ***引用计数***智能指针类型
+    * 记录所有者的数量，使一份数据被多个所有者同时持有
+    * 并在没有任何所有者时自动清理数据
+
+### 引用和智能指针的其他不同
+
+> 引用： 只借用数据
+>
+> 智能指针：很多时候都拥有他所指向的数据
+
+
+### `Box<T>是最简单的智能指针`
+
+* 允许在heap上存储数据（而不是stack）
+* ![img](images/box.png)
+* 没有性能开销
+* 没有其他额外功能
+* 实现了Deref trait和Drop trait
+* **只提供了“间接”存储和heap内存分配的功能**
+
+### Deref Trait
+
+* 实现Deref trait 使我们可以***自定义解引用运算符*的行为***
+* 通过实现Deref，智能指针可***像常规引用一样来处理***
+
+
+### MyBox
+
+```rust
+use std::ops::Deref;
+
+struct MyBox<T>(T);
+
+impl<T> MyBox<T> {
+    fn new(x: T) -> MyBox<T> {
+        MyBox(x)
+    }
+}
+
+impl<T> Deref for MyBox<T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        &self.0
+    }
+}
+
+fn main() {
+    let x = 5;
+    let y = MyBox::new(x);
+
+    assert_eq!(5, x);
+    assert_eq!(5, *y);
+    assert_eq!(5, *(y.deref()));
+}
+
+```
+
+
+### 函数和方法的隐式解引用转换（Deref Coercion）
+
+* 隐式解引用转化是为函数和方法提供的一种便捷特性
+* 假设T实现了Deref trait
+  * Deref Coercion可以把***T的引用***转化为***T经过Deref 操作后生成的引用***
+* 当把某类型的引用传递给函数或方法时，但它的类型与定义的参数类型不匹配
+  * Deref Coercion就会自动发生
+  * 编译器会对deref进行一系列调用，来把它转为所需的参数类型
+    * 在编译时完成，没有额外性能开销
+
+
+### Drop trait
+
+> 实现Drop trait， 可以让我们自定义***当值将要离开作用域时发生的动作***
+>
+> * 例如：文件、网络资源释放
+> * 任何类型都可以实现Drop trait
+
+* Drop trait只要求实现drop方法
+  * 参数：对self的可变引用
+* Drop trait在预导入模块里（prelude）
+* Rust不允许手动调用Drop trait的drop方法
+* 但可以调用标准库的std::mem::drop函数，来提前drop值
