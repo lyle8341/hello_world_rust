@@ -976,3 +976,221 @@ fn main() {
 * Drop trait在预导入模块里（prelude）
 * Rust不允许手动调用Drop trait的drop方法
 * 但可以调用标准库的std::mem::drop函数，来提前drop值
+
+
+### `RC<T>引用计数智能指针`
+
+
+### Rc::clone() vs 类型的clone()方法
+
+> * Rc::clone() 增加引用，不会执行数据的深度拷贝操作
+> * 类型的clone() 很多会执行数据的深度拷贝操作
+
+
+###  `使用RefCell<T>在运行时记录借用信息`
+
+* 两个方法（安全接口）
+  * borrow方法
+    * 返回智能指针 `Ref<T>`,它实现了Deref
+  * borrow_mut方法
+    * 返回智能指针 `RefMut<T>`,它实现了Deref
+* `RefCell<T> 会记录当前存在多少个活跃的Ref<T>和RefMut<T>智能指针`
+  * 每次调用borrow：不可变借用计数加1
+  * 任何一个 `Ref<T>`的值离开作用域被释放时：不可变借用计数减1
+  * 每次调用borrow_mut: 可变借用计数加1
+  * 任何一个 `RefMut<T>`的值离开作用域被释放时：可变借用计数减1
+
+
+
+## 防止内存泄露的解决办法
+
+* 依靠开发者来保证，不能依靠Rust
+* 重新组织数据结构：一些引用来表达所有权，一些引用不表达所有权
+  * 循环引用中的一部分具有所有权，另一部分不涉及所有权关系
+  * 只有所有权关系才影响值的清理
+  * 把 `Rc<T>`换成 `Weak<T>`
+    * Rc::clone为 `Rc<T>`实例的strong_count加1，`Rc<T>`的实例只有在strong_count为0的时候才会被清理
+    * `Rc<T>`实例通过调用Rc::downgrade方法可以创建值的Weak Reference
+      * 返回类型是 `Weak<T>`（智能指针）
+
+
+### Strong vs Weak
+
+> * Strong Reference是关于如何分享 `Rc<T>`实例的所有权
+> * Weak Reference并不表达上述意思
+> * 使用Weak Reference并不会创建循环引用
+>   * 当strong reference数量为0的时候，Weak reference会自动断开
+> * 在使用 `Weak<T>`前，需保证它指向的值仍然存在
+>   * 在 `Weak<T>`实例上调用upgrade方法，返回 `Option<Rc<T>>`
+
+
+## Send 和 Sync trait
+
+> Rust语言中有两个并发概念：std::marker::Sync 和 std::marker::Send 标签trait
+
+#### send：允许线程间转移所有权
+
+> * 实现Send trait的类型可在线程间转移所有权
+> * Rust中几乎所有类型都实现了Send
+>   * `Rc<T>`没有实现Send，它只用于单线程情景
+> * 任何完全由Send类型组成的类型也被标记为Send
+> * 除了原始指针之外，几乎所有的基础类型都是Send
+
+#### Sync:运行从多线程访问
+
+> * 实现流量Sync的类型可以安全的被多个线程引用
+> * 也就是说：如果T是sync，那么&T就是send
+>   * 引用可以被安全的送往另一个线程
+> * 基础类型都是Sync
+> * 完全由Sync类型组成的类型也是Sync
+>   * 但，`Rc<T>`不是Sync的
+>   * `RefCell<T>`和 `Cell<T>`家族也不是Sync的
+
+
+#### 手动来实现Send和Sync是不安全的
+
+
+
+## Rust的面向对象编程特性
+
+* 封装
+  * pub
+* 继承
+  * Rust没有继承
+  * 继承的目的
+    * 代码复用
+      * 默认trait方法来进行代码共享
+    * 多态
+      * 泛型和trait约束
+* 很多新语言都不使用继承作为内置的程序设计方案了
+
+
+
+### trait对象必须保证对象安全
+
+> * 只能把满足对象安全（object-safe）的trait转化为trait对象
+> * Rust采用一些列规则来判定某个对象是否安全，只需记住两条
+>   * 方法的返回类型不是self
+>   * 方法中不包含任何泛型类型参数
+
+
+
+## 模式
+
+> * 模式是Rust中的一种特殊语法，用于匹配复杂和简单类型的结构
+> * 将模式与匹配表达式和其他构造结合使用，可以更好地控制程序的控制流
+> * 模式由以下元素（的一些组合）组成
+>   * 字面值
+>   * 解构的数组、enum、struct、tuple
+>   * 变量
+>   * 通配符
+>   * 占位符
+> * 想要使用模式，需要将其与某个值进行比较
+>   * 如果模式匹配，就可以在代码中使用这个值的相应部分
+
+
+### match的Arm
+
+```rust
+match Value {
+    pattern => Expression,
+    pattern => Expression,
+    pattern => Expression,
+}
+```
+
+* match表达式的要求
+  * 详尽
+* 一个特殊的模式： _(下划线)
+  * 它会匹配任何东西
+  * 不会绑定到变量
+  * 通常用于match的最后一个arm；或用于忽略某些值
+
+
+
+### 条件if let表达式
+
+* if let表达式主要是作为一种简短的方式来等价的代替只有一个匹配项的match
+* if let可选的可以拥有else，包括
+  * else if
+  * else if let
+* 但，if let不会检查穷尽性
+
+
+### while let 条件循环
+
+* 只要模式继续满足匹配的条件，那它运行while循环一直运行
+
+
+### for
+
+* for循环是Rust中最常见的循环
+* for循环中，***模式就是紧随for关键字后的值***
+
+
+### let
+
+* let语句也是模式
+* let pattern = expression;
+
+### 函数参数
+
+* 函数参数也可以是模式
+
+
+### 多重模式
+
+> 在match表达式中，使用 | 语法（或）可以匹配多种模式
+
+> ..=  来匹配某个范围的值
+
+### 解构以分解值
+
+* 可以使用模式来解构struct、enum、tuple，从而引用这些类型值的不同部分
+
+
+## Unsafe Rust
+
+> Unsafe Rust存在的原因
+>
+> * 静态分析是保守的
+>   * 使用unsafe rust，我们知道自己在做什么，并承担相应风险
+> * 计算机硬件本身就是不安全的，Rust需要能够进行底层系统编程
+
+### Unsafe超能力
+
+> Unsafe Rust里可执行的四个动作
+>
+> 1. 解引用原始指针
+> 1. 调用unsafe函数或方法
+> 1. 访问或修改可变的静态变量
+> 1. 实现unsafe trait
+
+
+### 常量和不可变静态变量的区别
+
+* 静态变量：有固定的内存地址，使用它的值总会访问同样的数据
+* 常量：允许使用它们的时候对数据进行复制
+* 静态变量：可以是可变的，访问和修改静态可变变量是不安全（unsafe）的
+
+
+### 在trait定义中使用关联类型来指定占位类型
+
+> 关联类型（associated type)是Trait中的类型占位符
+
+
+
+### 类型别名
+
+> 使用type 关键字
+>
+> `type kilometers = i32;`
+>
+> `type thunk  = Box<dyn Fn() + send + 'static>;`
+
+
+### Never类型
+
+
+
+## 宏

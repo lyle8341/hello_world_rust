@@ -1,4 +1,13 @@
+struct Point {
+    x: i32,
+    y: i32,
+}
+
 fn main() {
-    let v3 = |x| x + 1;
-    println!("闭包演示： {}", v3(4));
+    let p = Point { x: 0, y: 7 };
+
+    let Point { x:a,y:b } = p;
+
+    println!("a = {}", a);
+    println!("b = {}", b);
 }
