@@ -15,13 +15,13 @@ fn main() {
 ///
 /// chrome失败的原因：
 /// https://users.rust-lang.org/t/cant-write-to-tcpstream-without-reading-from-it/16713/2
-/// 
+///
 /// answer:
-/// You have to read the entire request or else the client blocks and then fails as soon as you close the socket. 
+/// You have to read the entire request or else the client blocks and then fails as soon as you close the socket.
 /// It never actually tries to read your response before it has sent the request completely.
 /// The code is problematic because it relies on OS buffering on the client or server side.
 /// Without buffering, a peer can only send if the other peer is reading and vice versa. With buffering, the same problem exists but only if the buffers are full.
-/// 
+///
 /// buffer大小是512时，postman可以，chrome不行。1024时，都可以
 ///
 fn handle_request(mut stream: TcpStream) {
@@ -29,9 +29,18 @@ fn handle_request(mut stream: TcpStream) {
     stream.read(&mut buffer).unwrap();
     //println!("Request: {}", String::from_utf8_lossy(&buffer[..]));
 
-    let html = fs::read_to_string("hello.html").unwrap();
-    let contents = format!("HTTP/1.1 200 OK\r\n\r\n{}", html);
+    let label = b"GET / HTTP/1.1\r\n";
+    if buffer.starts_with(label) {
+        let html = fs::read_to_string("hello.html").unwrap();
+        let contents = format!("HTTP/1.1 200 OK\r\n\r\n{}", html);
 
-    stream.write(contents.as_bytes()).unwrap();
-    stream.flush().unwrap();
+        stream.write(contents.as_bytes()).unwrap();
+        stream.flush().unwrap();
+    } else {
+        let status_line = "HTTP/1.1 404 NOT FOUND\r\n\r\n";
+        let html = fs::read_to_string("404.html").unwrap();
+        let contents = format!("{}{}", status_line, html);
+        stream.write(contents.as_bytes()).unwrap();
+        stream.flush().unwrap();
+    }
 }
